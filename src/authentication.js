@@ -13,7 +13,7 @@ var currentIterations = 12000;
 var hashAlgorithm = {
 	name : '',
 	adaptive : false,
-	doHash : function() {
+	doHash : function(hashArgs) {
 		throw "Algorithm not defined!";
 	}
 };
@@ -32,10 +32,8 @@ var simpleHashAlgorithm = Object.create(hashAlgorithm, {
 });
 
 // This is an example of how to secure an obsolete hash with a wrapper adaptive
-// algorithm. In a some situations it may be more complicated; Here we are
-// simply reusing the salt. if the wrapped algorithm have different salt length
-// than you want for the wrapper algorithm for example it may be necessary to
-// use something like wrappedSalt|wrapperSalt for the composite salt.
+// algorithm. If both wrapper and wrapped algorithms are adaptive of course you
+// will need to have a composite iteration field as well
 var wrappedAlgorithm = Object.create(hashAlgorithm, {
 	// assume wrapped algorithm is simple hash, outer is adaptive; if not you'd
 	// have to split the iterations field as well
@@ -50,25 +48,29 @@ var wrappedAlgorithm = Object.create(hashAlgorithm, {
 	},
 	doHash : {
 		value : function(hashArgs, fn) {
+			//1st salt is for wrapped algorithm, 2nd for wrapper
 			var salts = hashArgs.salt.split('|');
 			var wrapperAlgorithm = this.wrapperAlgorithm;
 			var name = this.name;
+			//create wrapped hash with plaintext password
 			this.wrappedAlgorithm.doHash({
 				plaintext : hashArgs.plaintext,
 				salt : salts[0]
 			}, function(err, wrappedHash) {
-					wrapperAlgorithm.doHash({
-						plaintext : wrappedHash,
-						salt : salts[1],
-						iterations : hashArgs.iterations
-						}, function(err, wrapperHash) {
-							if (err)
-								return fn(err);
-							var fields = exports
-									.splitCredentialFields(wrapperHash);
-							fn(null, name + '$' + hashArgs.iterations
-									+ '$' + fields.hash + '$' + hashArgs.salt);
-						});
+				//now treat the wrapped hash as plaintext to create the output hash
+				wrapperAlgorithm.doHash({
+					plaintext : wrappedHash,
+					salt : salts[1],
+					iterations : hashArgs.iterations
+					}, function(err, wrapperHash) {
+						if (err)
+							return fn(err);
+						var fields = exports
+								.splitCredentialFields(wrapperHash);
+						//callback with final output
+						fn(null, name + '$' + hashArgs.iterations
+								+ '$' + fields.hash + '$' + hashArgs.salt);
+					});
 			});
 		}
 	}
@@ -140,6 +142,7 @@ exports.hash = function(password, salt, fn) {
 			iterations : currentIterations
 		}, fn);
 	} else {
+		//no salt provided - generate and recursively call same function
 		if (typeof salt === 'function') {
 			fn = salt;
 		}
@@ -174,6 +177,7 @@ exports.verify = function(password, secureCredential, fn) {
 		hashArgs.iterations = parseInt(fields.iterations);
 	}
 
+	//delegate to algorithm implementation for actual hashing
 	algorithm.doHash(hashArgs, function(err, calcHash) {
 		if(err)
 			return fn(err);
@@ -207,7 +211,8 @@ algorithms.sha1topbkdf2 = Object.create(wrappedAlgorithm, {
 	}
 });
 
-// wrap hash with pbkdf2 algorithm
+// wrap hash with pbkdf2 algorithm. because there is a wrapped and wrapper 
+// algorithm, we need to output both salts; using pipe ('|') as separator.
 exports.wrapSha1 = function(hashToWrap, fn) {
 	var wrappedFields = exports.splitCredentialFields(hashToWrap);
 	crypto.randomBytes(len, function(err, genSalt) {
