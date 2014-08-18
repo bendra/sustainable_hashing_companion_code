@@ -52,7 +52,7 @@ function hashSha256() {
 				authentication.verify(password1, sha1Hash, function(err,
 						result3, rehash) {
 					if (result3) {
-						console.log('And we can still verify the old hash, which our function re-hashes as ' + rehash);
+						console.log('And we can still verify the old hash, which our function re-hashes as ' + rehash + " so you can update the user credential");
 						rl.question('press enter to continue...', function (text) {
 							hashPKDF2800();
 						});
@@ -139,9 +139,9 @@ function wrapSha1(){
 	console.log('\nSo now if we still have the sha1 hash ' + sha1Hash
 		+ ' around we can wrap it...');
 	authentication.wrapSha1(sha1Hash, function(err, result) {
-		console.log('For sha1 hash ' + sha1Hash + ' the result is ' + result);
+		console.log('For sha1 hash ' + sha1Hash + '\n the result is\n' + result);
 		authentication.verify(password1, result, function(err, result2){
-			console.log('Now can we verify password ' + password1 + " against this hash? " + result2);
+			console.log('And the original password ' + password1 + " verifies against this hash!");
 			rl.close();
 		});
 	});
