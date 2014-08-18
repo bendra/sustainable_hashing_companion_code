@@ -3,6 +3,11 @@
 var authentication = require('../src/authentication');
 var password1 = 'p@ssw0rd!1', password2 = 'p@ssw0rd!2', password3 = 'p@ssw0rd!3';
 var sha1Hash, sha256Hash, pbkdf2Hash, pbkdf2Hash2, wrappedSha1Hash;
+var readline = require('readline');
+var rl = readline.createInterface({
+	input: process.stdin,
+	output: process.stdout
+});
 
 hashSha1();
 
@@ -22,7 +27,10 @@ function hashSha1() {
 			if (result2) {
 				console.log("\n\nConfirmed that hash \n" + result
 						+ "\n verifies for password " + password1);
-				hashSha256();
+				rl.question('press enter to continue...', function (text) {
+					hashSha256();
+				});
+				
 			}
 		});
 	});
@@ -45,7 +53,9 @@ function hashSha256() {
 						result3, rehash) {
 					if (result3) {
 						console.log('And we can still verify the old hash, which our function re-hashes as ' + rehash);
-						hashPKDF2800();
+						rl.question('press enter to continue...', function (text) {
+							hashPKDF2800();
+						});
 					}
 				});
 			}
@@ -68,14 +78,16 @@ function hashPKDF2800() {
 					console.log("\n\nConfirmed that hash \n"
 									+ result
 									+ "\n verifies for password "
-									+ password2);
+									+ password3);
 					authentication.verify(password1,sha1Hash,
 						function(err, result3) {
 							if (result3) {
 								authentication.verify(password2, sha256Hash,
 									function(err, result4) {
-										console.log('And we can still verify the two older hashes!');
-										hashPKDF210000();
+									console.log('And we can still verify the two older hashes!');
+									rl.question('press enter to continue...', function (text) {
+											hashPKDF210000();
+									});
 								});
 							}
 					});
@@ -99,7 +111,7 @@ key/salt length...');
 				console.log("\n\nConfirmed that hash \n"
 							 	+ result
 								+ "\n verifies for password "
-								+ password2);
+								+ password3);
 				authentication.verify(password1, sha1Hash, 
 						function(err, result3) {
 					if (result3) {
@@ -110,7 +122,9 @@ key/salt length...');
 										function(err,result4) {
 									console.log('And we can still verify ' +
 											'the three older hashes!');
-									wrapSha1();
+									rl.question('press enter to continue...', function (text) {
+										wrapSha1();
+									});
 								});
 							}
 						});
@@ -127,7 +141,8 @@ function wrapSha1(){
 	authentication.wrapSha1(sha1Hash, function(err, result) {
 		console.log('For sha1 hash ' + sha1Hash + ' the result is ' + result);
 		authentication.verify(password1, result, function(err, result2){
-			console.log('Password ' + password1 + " verifieds against this hash? " + result2);
+			console.log('Now can we verify password ' + password1 + " against this hash? " + result2);
+			rl.close();
 		});
 	});
 }
