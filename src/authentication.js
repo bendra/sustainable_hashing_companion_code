@@ -51,27 +51,21 @@ var wrappedAlgorithm = Object.create(hashAlgorithm, {
             var salts = hashArgs.salt.split('|');
             var wrapperAlgorithm = this.wrapperAlgorithm;
             var name = this.name;
+            
+            var wrapHash = function(err, hash) {
+                if (err)
+                    return fn(err);
+                fn(null, 'pbkdf2$' + hashArgs.iterations + '$'
+                        + hash.toString('base64') + '$'
+                        + hashArgs.salt);
+            }
+
+            
             // create wrapped hash with plaintext password
             this.wrappedAlgorithm.doHash({
                 plaintext : hashArgs.plaintext,
                 salt : salts[0]
-            }, function(err, wrappedHash) {
-                // now treat the wrapped hash as plaintext to create the output
-                // hash
-                wrapperAlgorithm.doHash({
-                    plaintext : wrappedHash,
-                    salt : salts[1],
-                    byteLen : hashArgs.byteLen,
-                    iterations : hashArgs.iterations
-                }, function(err, wrapperHash) {
-                    if (err)
-                        return fn(err);
-                    var fields = exports.splitCredentialFields(wrapperHash);
-                    // callback with final output
-                    fn(null, name + '$' + hashArgs.iterations + '$'
-                            + fields.hash + '$' + hashArgs.salt);
-                });
-            });
+            }, wrapHash);
         }
     }
 });
@@ -98,16 +92,20 @@ var algorithms = {
         doHash : {
             // use crypto.pbkdf2 to generate hash
             value : function(hashArgs, fn) {
+                
+                var onHash = function(err, hash) {
+                    if (err)
+                        return fn(err);
+                    fn(null, 'pbkdf2$' + hashArgs.iterations + '$'
+                            + hash.toString('base64') + '$'
+                            + hashArgs.salt);
+                };
+
                 crypto.pbkdf2(hashArgs.plaintext, hashArgs.salt,
-                        hashArgs.iterations, hashArgs.byteLen, function(err, hash) {
-                            if (err)
-                                return fn(err);
-                            fn(null, 'pbkdf2$' + hashArgs.iterations + '$'
-                                    + hash.toString('base64') + '$'
-                                    + hashArgs.salt);
-                        });
+                        hashArgs.iterations, hashArgs.byteLen, onHash);
             }
         }
+        
     })
 };
 
