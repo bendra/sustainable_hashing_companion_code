@@ -1,7 +1,7 @@
 'use strict';
 
 var authentication = require('../src/authentication');
-var password1 = 'p@ssw0rd!1', password2 = 'p@ssw0rd!2', password3 = 'p@ssw0rd!3';
+var password1 = 'p@ssw0rd!1', password2 = 'p@ssw0rd!2', password3 = 'p@ssw0rd!3', password4='p@ssw0rd!4';
 var sha1Hash, sha256Hash, pbkdf2Hash, pbkdf2Hash2, wrappedSha1Hash;
 var readline = require('readline');
 var rl = readline.createInterface({
@@ -27,10 +27,10 @@ function hashSha1() {
 			if (result2) {
 				console.log("\n\nConfirmed that hash \n" + result
 						+ "\n verifies for password " + password1);
-				rl.question('press enter to continue...', function (text) {
+				rl.question('press enter to continue...', function(text) {
 					hashSha256();
 				});
-				
+
 			}
 		});
 	});
@@ -52,10 +52,13 @@ function hashSha256() {
 				authentication.verify(password1, sha1Hash, function(err,
 						result3, rehash) {
 					if (result3) {
-						console.log('And we can still verify the old hash, which our function re-hashes as ' + rehash + " so you can update the user credential");
-						rl.question('press enter to continue...', function (text) {
-							hashPKDF2800();
-						});
+						console.log('And we can still verify the old hash, '
+								+ ' which our function re-hashes as ' + rehash
+								+ ' so you can update the user credential');
+						rl.question('press enter to continue...',
+								function(text) {
+									hashPKDF2800();
+								});
 					}
 				});
 			}
@@ -64,75 +67,88 @@ function hashSha256() {
 }
 
 function hashPKDF2800() {
-	console.log("\nNow we upgrade to PBKDF2 with 800 iterations...");
-	authentication.setAlgorithm('pbkdf2');
-	authentication.setIterations(800);
-	authentication.setLen(64);
-	authentication.hash(password3, function(err, result) {
-		pbkdf2Hash = result;
-		console.log('\nFor plaintext ' + password3
-						+ ', resulting hash:\n' + result);
-		authentication.verify(password3, result,
-			function(err, result2) {
-				if (result2) {
-					console.log("\n\nConfirmed that hash \n"
-									+ result
-									+ "\n verifies for password "
-									+ password3);
-					authentication.verify(password1,sha1Hash,
-						function(err, result3) {
-							if (result3) {
-								authentication.verify(password2, sha256Hash,
-									function(err, result4) {
-									console.log('And we can still verify the two older hashes!');
-									rl.question('press enter to continue...', function (text) {
-											hashPKDF210000();
-									});
-								});
-							}
-					});
-				}
-		});
-	});
+    console.log("\nNow we upgrade to PBKDF2 with 800 iterations...");
+    authentication.setAlgorithm('pbkdf2');
+    authentication.setIterations(800);
+    authentication.setLen(64);
+
+    
+    var onHash = function(err, result) {
+
+        var onVerifyPassword1 = function(err, result3) {
+            if (result3) {
+                authentication.verify(password2, sha256Hash, onVerifyPassword2);
+            }
+        };
+
+        var onVerifyPassword2 = function(err, result4) {
+            console.log('And we can still verify the two older hashes!');
+            rl.question('press enter to continue...', function(text) {
+                hashPKDF210000();
+            });
+        }
+
+        var onVerifyPassword3 = function(err, result2) {
+            if (result2) {
+                console.log("\n\nConfirmed that hash \n" + result
+                        + "\n verifies for password " + password3);
+                authentication.verify(password1, sha1Hash, onVerifyPassword1);
+            }
+        };
+
+        pbkdf2Hash = result;
+        console.log('\nFor plaintext ' + password3 + ', resulting hash:\n'
+                + result);
+        authentication.verify(password3, result, onVerifyPassword3);
+    };
+    
+    authentication.hash(password3, onHash);
 }
 
 function hashPKDF210000() {
-	console.log('\nNow we upgrade to PBKDF2 with 10000 iterations, 128 byte \
+    console
+            .log('\nNow we upgrade to PBKDF2 with 10000 iterations, 128 byte \
 key/salt length...');
-	authentication.setAlgorithm('pbkdf2');
-	authentication.setIterations(10000);
-	authentication.setLen(128);
-	authentication.hash(password3, function(err, result) {
-		pbkdf2Hash2 = result;
-		console.log('\nFor plaintext ' + password3
-						+ ', resulting hash:\n' + result);
-		authentication.verify(password3, result, function(err, result2) {
-			if (result2) {
-				console.log("\n\nConfirmed that hash \n"
-							 	+ result
-								+ "\n verifies for password "
-								+ password3);
-				authentication.verify(password1, sha1Hash, 
-						function(err, result3) {
-					if (result3) {
-						authentication.verify(password2, sha256Hash, 
-								function(err, result4) {
-							if (result4) {
-								authentication.verify(password2, sha256Hash, 
-										function(err,result4) {
-									console.log('And we can still verify ' +
-											'the three older hashes!');
-									rl.question('press enter to continue...', function (text) {
-										wrapSha1();
-									});
-								});
-							}
-						});
-					}
-				});
-			}
-		});
-	});
+    authentication.setAlgorithm('pbkdf2');
+    authentication.setIterations(10000);
+    authentication.setLen(128);
+
+    var onHash = function(err, result) {
+        pbkdf2Hash2 = result;
+        console.log('\nFor plaintext ' + password4 + ', resulting hash:\n'
+                + result);
+        authentication.verify(password4, result, onVerifyPassword4);
+    };
+
+    var onVerifyPassword4 = function(err, result2) {
+        if (result2) {
+            console.log("\n\nConfirmed that hash \n" + pbkdf2Hash2
+                    + "\n verifies for password " + password4);
+            console.log('0');
+            authentication.verify(password3, pbkdf2Hash, onVerifyPassword3);
+        }
+    }
+
+    var onVerifyPassword3 = function(err, result3) {
+        if (result3) {
+            authentication.verify(password2, sha256Hash, onVerifyPassword2);
+        }
+    }
+
+    var onVerifyPassword2 = function(err, result4) {
+        if (result4) {
+            authentication.verify(password1, sha1Hash, onVerifyPassword1);
+        }
+    };
+
+    var onVerifyPassword1 = function(err, result4) {
+        console.log('And we can still verify ' + 'the three older hashes!');
+        rl.question('press enter to continue...', function(text) {
+            wrapSha1();
+        });
+    };
+
+    authentication.hash(password4, onHash);
 }
 
 function wrapSha1(){
