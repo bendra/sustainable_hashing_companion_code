@@ -1,7 +1,7 @@
 sustainable_hashing_companion_code
 ==================================
 
-Companion code for my Sustainable <a href="https://medium.com/@uther_bendragon/sustainable-password-hashing-8c6bd5de3844">Password Hashing article</a>.  The code in src/authentication.js and requires a node.js runtime environment.  
+Companion code for my <a href="https://medium.com/@uther_bendragon/sustainable-password-hashing-8c6bd5de3844">Sustainable Password Hashing article</a>.  The code in src/authentication.js and requires a node.js runtime environment.  
 The module can 
 * Hash passwords using a "preferred" algorithm/hash length/iteration count
 * Verify passwords against credentials hashed with the sha1, sha256, and pkbdf2 algorithms 
