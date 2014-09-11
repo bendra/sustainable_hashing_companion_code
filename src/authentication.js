@@ -10,7 +10,9 @@ var currentAlgorithm = 'pbkdf2';
 var currentIterations = 12000;
 
 // root of hashing algorithm type hierarchy
-var hashAlgorithm = {
+var HashAlgorithm = function() {
+};
+HashAlgorithm.prototype = {
     name : '',
     adaptive : false,
     doHash : function(hashArgs) {
@@ -19,7 +21,10 @@ var hashAlgorithm = {
 };
 
 // non-iterative hash functions supported by crypto
-var simpleHashAlgorithm = Object.create(hashAlgorithm, {
+var SimpleHashAlgorithm = function(name) {
+    this.name = name;
+};
+SimpleHashAlgorithm.prototype = Object.create(HashAlgorithm.prototype, {
     doHash : {
         value : function(hashArgs, fn) {
             var hash;
@@ -30,84 +35,80 @@ var simpleHashAlgorithm = Object.create(hashAlgorithm, {
     }
 });
 
-// This is an example of how to secure an obsolete hash with a wrapper adaptive
-// algorithm. If both wrapper and wrapped algorithms are adaptive of course you
-// will need to have a composite iteration field as well
-var wrappedAlgorithm = Object.create(hashAlgorithm, {
-    // assume wrapped algorithm is simple hash, outer is adaptive; if not you'd
-    // have to split the iterations field as well
-    wrappedAlgorithm : {
-        value : ''
-    },
-    wrapperAlgorithm : {
-        value : ''
-    },
+// adaptive algorithm - need name + iterations
+var AdaptiveHashAlgorithm = function(name, hashFunction) {
+    this.name = name;
+    this.doHash = hashFunction;
+};
+AdaptiveHashAlgorithm.prototype = Object.create(HashAlgorithm.prototype, {
     adaptive : {
         value : true
-    },
-    doHash : {
-        value : function(hashArgs, fn) {
-            // 1st salt is for wrapped algorithm, 2nd for wrapper
-            var salts = hashArgs.salt.split('|');
-            var wrapperAlgorithm = this.wrapperAlgorithm;
-            var name = this.name;
-            
-            var wrapHash = function(err, hash) {
-                if (err)
-                    return fn(err);
-                fn(null, 'pbkdf2$' + hashArgs.iterations + '$'
-                        + hash.toString('base64') + '$'
-                        + hashArgs.salt);
-            }
-
-            
-            // create wrapped hash with plaintext password
-            this.wrappedAlgorithm.doHash({
-                plaintext : hashArgs.plaintext,
-                salt : salts[0]
-            }, wrapHash);
-        }
     }
 });
 
+// This is an example of how to secure an obsolete hash with a wrapper adaptive
+// algorithm. If both wrapper and wrapped algorithms are adaptive of course you
+// will need to have a composite iteration field as well
+var WrappedHashAlgorithm = function(name, wrappedAlgorithm, wrapperAlgorithm) {
+    this.name = name;
+    this.wrappedAlgorithm = wrappedAlgorithm;
+    this.wrapperAlgorithm = wrapperAlgorithm;
+};
+WrappedHashAlgorithm.prototype = Object
+        .create(AdaptiveHashAlgorithm.prototype,
+                {
+                    wrappedAlgorithm : {
+                        value : undefined
+                    },
+                    wrapperAlgorithm : {
+                        value : undefined
+                    },
+                    doHash : {
+                        value : function(hashArgs, fn) {
+                            // 1st salt is for wrapped algorithm, 2nd for
+                            // wrapper
+                            var salts = hashArgs.salt.split('|');
+                            var wrapperAlgorithm = this.wrapperAlgorithm;
+                            var name = this.name;
+
+                            var wrapHash = function(err, hash) {
+                                if (err)
+                                    return fn(err);
+                                fn(null, wrapperAlgorithm.name + '$'
+                                        + hashArgs.iterations + '$'
+                                        + hash.toString('base64') + '$'
+                                        + hashArgs.salt);
+                            };
+
+                            // create wrapped hash with plaintext password
+                            this.wrappedAlgorithm.doHash({
+                                plaintext : hashArgs.plaintext,
+                                salt : salts[0]
+                            }, wrapHash);
+                        }
+                    }
+                });
+
 // lookup table for the algorithms we support
 var algorithms = {
-    sha1 : Object.create(simpleHashAlgorithm, {
-        name : {
-            value : 'sha1'
-        }
-    }),
-    sha256 : Object.create(simpleHashAlgorithm, {
-        name : {
-            value : 'sha256'
-        }
-    }),
-    pbkdf2 : Object.create(hashAlgorithm, {
-        name : {
-            value : 'pbkdf2'
-        },
-        adaptive : {
-            value : false
-        },
-        doHash : {
-            // use crypto.pbkdf2 to generate hash
-            value : function(hashArgs, fn) {
-                
-                var onHash = function(err, hash) {
-                    if (err)
-                        return fn(err);
-                    fn(null, 'pbkdf2$' + hashArgs.iterations + '$'
-                            + hash.toString('base64') + '$'
-                            + hashArgs.salt);
-                };
+    sha1 : new SimpleHashAlgorithm('sha1'),
+    sha256 : new SimpleHashAlgorithm('sha256'),
+    pbkdf2 : new AdaptiveHashAlgorithm('pbkdf2', function(hashArgs, fn) {
+        // use crypto.pbkdf2 to generate hash
+        var onHash = function(err, hash) {
+            if (err)
+                return fn(err);
+            fn(null, 'pbkdf2$' + hashArgs.iterations + '$'
+                    + hash.toString('base64') + '$' + hashArgs.salt);
+        };
 
-                crypto.pbkdf2(hashArgs.plaintext, hashArgs.salt,
-                        hashArgs.iterations, hashArgs.byteLen, onHash);
-            }
-        }
-        
+        crypto.pbkdf2(hashArgs.plaintext, hashArgs.salt, hashArgs.iterations,
+                hashArgs.byteLen, onHash);
     })
 };
+//here's how to wrap an obsolete hash
+algorithms.sha1topbkdf2 = new WrappedHashAlgorithm('sha1topbkdf2',
+        algorithms.sha1, algorithms.pbkdf2);
 
 // helper function to make secured credentials more readable
 exports.splitCredentialFields = function(hash) {
@@ -176,17 +177,16 @@ exports.verify = function(password, secureCredential, fn) {
     if (fields.iterations) {
         hashArgs.iterations = parseInt(fields.iterations);
     }
-    
+
     // delegate to algorithm implementation for actual hashing
     algorithm.doHash(hashArgs, function(err, calcHash) {
         if (err)
             return fn(err);
-        if (calcHash !== secureCredential){
+        if (calcHash !== secureCredential) {
             console.log('\n\n\ncalcHash        : ' + calcHash);
             console.log('\nsecureCredential: ' + secureCredential);
             fn(null, false);
-        }
-        else {
+        } else {
             if (fields.algorithm === currentAlgorithm
                     && fields.iterations === currentIterations) {
                 fn(null, true);
@@ -200,19 +200,6 @@ exports.verify = function(password, secureCredential, fn) {
 
     });
 };
-
-// here's how to wrap an obsolete hash
-algorithms.sha1topbkdf2 = Object.create(wrappedAlgorithm, {
-    name : {
-        value : 'sha1topbkdf2'
-    },
-    wrappedAlgorithm : {
-        value : algorithms.sha1
-    },
-    wrapperAlgorithm : {
-        value : algorithms.pbkdf2
-    }
-});
 
 // wrap hash with pbkdf2 algorithm. because there is a wrapped and wrapper
 // algorithm, we need to output both salts; using pipe ('|') as separator.
